@@ -1,0 +1,11 @@
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/CMakeFiles/edit_cache.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/CMakeFiles/rebuild_cache.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/CMakeFiles/Shaders.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/CMakeFiles/edit_cache.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/CMakeFiles/vkbootstrap.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/CMakeFiles/imgui.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/CMakeFiles/rebuild_cache.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/CMakeFiles/tinyobjloader.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/src/CMakeFiles/rebuild_cache.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/src/CMakeFiles/edit_cache.dir
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/src/CMakeFiles/vulkan_guide.dir

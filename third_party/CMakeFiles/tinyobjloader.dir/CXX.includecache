@@ -1,0 +1,40 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/tinyobjloader/tiny_obj_loader.cc
+tiny_obj_loader.h
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/tinyobjloader/tiny_obj_loader.h
+
+/media/lyrapuff/Programming/cpp/vulkan-guide-starting-point/third_party/tinyobjloader/tiny_obj_loader.h
+map
+-
+string
+-
+vector
+-
+cassert
+-
+cctype
+-
+cmath
+-
+cstddef
+-
+cstdlib
+-
+cstring
+-
+limits
+-
+utility
+-
+fstream
+-
+sstream
+-
+
