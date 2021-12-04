@@ -40,6 +40,16 @@ struct DeletionQueue {
     }
 };
 
+struct FrameData {
+    VkSemaphore presentSemaphore, renderSemaphore;
+    VkFence renderFence;
+
+    VkCommandPool commandPool;
+    VkCommandBuffer mainCommandBuffer;
+};
+
+constexpr unsigned int FRAME_OVERLAP = 2;
+
 class VulkanEngine {
 public:
 
@@ -58,6 +68,8 @@ public:
     std::unordered_map<std::string, Material> _materials;
     std::unordered_map<std::string, Mesh> _meshes;
 
+    glm::vec3 _camPos {0.f, 0.f, -10.f};
+
     VmaAllocator _allocator;
 
     VkInstance _instance;
@@ -71,17 +83,13 @@ public:
     std::vector<VkImage> _swapchainImages;
     std::vector<VkImageView> _swapchainImageViews;
 
+    FrameData _frames[FRAME_OVERLAP];
+
     VkQueue _graphicsQueue;
     uint32_t _graphicsQueueFamily;
 
-    VkCommandPool _commandPool;
-    VkCommandBuffer _mainCommandBuffer;
-
     VkRenderPass _renderPass;
     std::vector<VkFramebuffer> _framebuffers;
-
-    VkSemaphore _presentSemaphore, _renderSemaphore;
-    VkFence _renderFence;
 
     VkPipelineLayout _trianglePipelineLayout;
     VkPipelineLayout _meshPipelineLayout;
@@ -91,16 +99,12 @@ public:
     AllocatedImage _depthImage;
     VkFormat _depthFormat;
 
-	//initializes everything in the engine
 	void init();
 
-	//shuts down the engine
 	void cleanup();
 
-	//draw loop
 	void draw();
 
-	//run main loop
 	void run();
 
 private:
@@ -132,6 +136,8 @@ private:
     Material* get_material(const std::string& name);
 
     Mesh* get_mesh(const std::string& name);
+
+    FrameData& get_current_frame();
 
     void draw_objects(VkCommandBuffer cmd, RenderObject* first, int count);
 };

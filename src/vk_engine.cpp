@@ -192,14 +192,19 @@ void VulkanEngine::init_swapchain() {
 
 void VulkanEngine::init_commands() {
     VkCommandPoolCreateInfo commandPoolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    VK_CHECK(vkCreateCommandPool(_device, &commandPoolInfo, nullptr, &_commandPool));
 
-    VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_commandPool, 1);
-    VK_CHECK(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_mainCommandBuffer));
+    for (int i = 0; i < FRAME_OVERLAP; i++) {
+        FrameData& frame = _frames[i];
 
-    _mainDeletionQueue.push_function([=]() {
-        vkDestroyCommandPool(_device, _commandPool, nullptr);
-    });
+        VK_CHECK(vkCreateCommandPool(_device, &commandPoolInfo, nullptr, &frame.commandPool));
+
+        VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(frame.commandPool, 1);
+        VK_CHECK(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &frame.mainCommandBuffer));
+
+        _mainDeletionQueue.push_function([=]() {
+            vkDestroyCommandPool(_device, frame.commandPool, nullptr);
+        });
+    }
 }
 
 void VulkanEngine::init_default_renderpass() {
@@ -296,24 +301,28 @@ void VulkanEngine::init_sync_structures() {
 
     fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VK_CHECK(vkCreateFence(_device, &fenceCreateInfo, nullptr, &_renderFence));
-
-    _mainDeletionQueue.push_function([=]() {
-        vkDestroyFence(_device, _renderFence, nullptr);
-    });
-
     VkSemaphoreCreateInfo semaphoreCreateInfo = {};
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     semaphoreCreateInfo.pNext = nullptr;
     semaphoreCreateInfo.flags = 0;
 
-    VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_presentSemaphore));
-    VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_renderSemaphore));
+    for (int i = 0; i < FRAME_OVERLAP; i++) {
+        FrameData &frame = _frames[i];
 
-    _mainDeletionQueue.push_function([=]() {
-        vkDestroySemaphore(_device, _presentSemaphore, nullptr);
-        vkDestroySemaphore(_device, _renderSemaphore, nullptr);
-    });
+        VK_CHECK(vkCreateFence(_device, &fenceCreateInfo, nullptr, &frame.renderFence));
+
+        _mainDeletionQueue.push_function([=]() {
+            vkDestroyFence(_device, frame.renderFence, nullptr);
+        });
+
+        VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &frame.presentSemaphore));
+        VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &frame.renderSemaphore));
+
+        _mainDeletionQueue.push_function([=]() {
+            vkDestroySemaphore(_device, frame.presentSemaphore, nullptr);
+            vkDestroySemaphore(_device, frame.renderSemaphore, nullptr);
+        });
+    }
 }
 
 void VulkanEngine::init_pipelines() {
@@ -498,10 +507,12 @@ Mesh* VulkanEngine::get_mesh(const std::string& name) {
     }
 }
 
-void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int count) {
-    glm::vec3 camPos = {0.f, 1.f, -10.f};
+FrameData& VulkanEngine::get_current_frame() {
+    return _frames[_frameNumber % FRAME_OVERLAP];
+}
 
-    glm::mat4 view = glm::translate(glm::mat4(1.f), camPos);
+void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int count) {
+    glm::mat4 view = glm::translate(glm::mat4(1.f), _camPos);
     glm::mat4 projection = glm::perspective(glm::radians(70.f), 1700.f / 900.f, 0.1f, 200.0f);
     projection[1][1] *= -1;
 
@@ -536,9 +547,15 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int co
 
 void VulkanEngine::cleanup() {
 	if (_isInitialized) {
-        vkWaitForFences(_device, 1, &_renderFence, true, 1000000000);
+        for (int i = 0; i < FRAME_OVERLAP; i++) {
+            FrameData &frame = _frames[i];
+
+            vkWaitForFences(_device, 1, &frame.renderFence, true, 1000000000);
+        }
 
         _mainDeletionQueue.flush();
+
+        vmaDestroyAllocator(_allocator);
 
         vkDestroySurfaceKHR(_instance, _surface, nullptr);
 
@@ -550,15 +567,17 @@ void VulkanEngine::cleanup() {
 }
 
 void VulkanEngine::draw() {
-	VK_CHECK(vkWaitForFences(_device, 1, &_renderFence, true, 1000000000));
-    VK_CHECK(vkResetFences(_device, 1, &_renderFence));
+    FrameData& frame = get_current_frame();
+
+	VK_CHECK(vkWaitForFences(_device, 1, &frame.renderFence, true, 1000000000));
+    VK_CHECK(vkResetFences(_device, 1, &frame.renderFence));
 
     uint32_t swapchainImageIndex;
-    VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, 1000000000, _presentSemaphore, nullptr, &swapchainImageIndex));
+    VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, 1000000000, frame.presentSemaphore, nullptr, &swapchainImageIndex));
 
-    VK_CHECK(vkResetCommandBuffer(_mainCommandBuffer, 0));
+    VK_CHECK(vkResetCommandBuffer(frame.mainCommandBuffer, 0));
 
-    VkCommandBuffer cmd = _mainCommandBuffer;
+    VkCommandBuffer cmd = frame.mainCommandBuffer;
 
     VkCommandBufferBeginInfo cmdBeginInfo = {};
     cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -614,15 +633,15 @@ void VulkanEngine::draw() {
     submit.pWaitDstStageMask = &waitStage;
 
     submit.waitSemaphoreCount = 1;
-    submit.pWaitSemaphores = &_presentSemaphore;
+    submit.pWaitSemaphores = &frame.presentSemaphore;
 
     submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores = &_renderSemaphore;
+    submit.pSignalSemaphores = &frame.renderSemaphore;
 
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd;
 
-    VK_CHECK(vkQueueSubmit(_graphicsQueue, 1, &submit, _renderFence));
+    VK_CHECK(vkQueueSubmit(_graphicsQueue, 1, &submit, frame.renderFence));
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -631,7 +650,7 @@ void VulkanEngine::draw() {
     presentInfo.pSwapchains = &_swapchain;
     presentInfo.swapchainCount = 1;
 
-    presentInfo.pWaitSemaphores = &_renderSemaphore;
+    presentInfo.pWaitSemaphores = &frame.renderSemaphore;
     presentInfo.waitSemaphoreCount = 1;
 
     presentInfo.pImageIndices = &swapchainImageIndex;
@@ -653,6 +672,7 @@ void VulkanEngine::run()
 			if (e.type == SDL_QUIT) {
                 bQuit = true;
             }
+
             else if (e.type == SDL_KEYDOWN) {
                 if (e.key.keysym.sym == SDLK_SPACE) {
                     _selectedShader += 1;
@@ -661,18 +681,25 @@ void VulkanEngine::run()
                         _selectedShader = 0;
                     }
                 }
+
+                glm::vec3 movement = glm::vec3 {0.f, 0.f, 0.f};
+
+                if (e.key.keysym.sym == SDLK_w) {
+                    movement += glm::vec3 {0.f, 0.f, 0.1f};
+                }
+                if (e.key.keysym.sym == SDLK_a) {
+                    movement += glm::vec3 {0.1f, 0.f, 0.f};
+                }
+                if (e.key.keysym.sym == SDLK_s) {
+                    movement += glm::vec3 {0.f, 0.f, -0.1f};
+                }
+                if (e.key.keysym.sym == SDLK_d) {
+                    movement += glm::vec3 {-0.1f, 0.f, 0.f};
+                }
+
+                _camPos += glm::normalize(movement);
             }
 		}
-
-        float t = _frameNumber / 120.0f;
-
-        for (int i = 0; i < _renderObjects.size(); i++) {
-            RenderObject& object = _renderObjects[i];
-
-            glm::mat4 translation = glm::translate(glm::mat4{ 1.0 }, glm::vec3(sin(t) + i * 5 - 9, cos(t), 0));
-            glm::mat4 scale = glm::scale(glm::mat4{ 1.0 }, glm::vec3(1, 1, 1));
-            object.transformMatrix = translation * scale;
-        }
 
 		draw();
 	}
